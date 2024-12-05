@@ -9,7 +9,7 @@
 
 
 #if !defined(__i386__)
-#error "This tutorial needs to be compiled with a ix86-elf compiler"
+#error "This needs to be compiled with a ix86-elf compiler"
 #endif
 
 /* Hardware text mode color constants. */
@@ -24,11 +24,6 @@ uint8_t intro_array[168] = {	0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,1,1,1,0,0,
 				1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,0,
 				1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,0,
 				1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,0,1,1,1,0,0};
-
-
-
-
-
 
 enum vga_color {
 	VGA_COLOR_BLACK = 0,
@@ -49,24 +44,6 @@ enum vga_color {
 	VGA_COLOR_WHITE = 15,
 };
 
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) 
-{
-	return fg | bg << 4;
-}
-
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) 
-{
-	return (uint16_t) uc | (uint16_t) color << 8;
-}
-
-size_t strlen(const char* str) 
-{
-	size_t len = 0;
-	while (str[len])
-		len++;
-	return len;
-}
-
 static const size_t VGA_WIDTH = 80;
 static const size_t VGA_HEIGHT = 25;
 
@@ -74,95 +51,134 @@ size_t terminal_row;
 size_t terminal_column;
 uint8_t terminal_color;
 uint16_t* terminal_buffer;
-void scroll_up();
-void terminal_initialize(void) 
-{
-	terminal_row = 0;
-	terminal_column = 0;
-	terminal_color = vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_WHITE);
-	terminal_buffer = (uint16_t*) 0xB8000;
-	for (size_t y = 0; y < VGA_HEIGHT; y++) {
-		for (size_t x = 0; x < VGA_WIDTH; x++) {
-			const size_t index = y * VGA_WIDTH + x;
-			terminal_buffer[index] = vga_entry(' ', terminal_color);
-		}
+
+
+void fill_the_screen(){	
+	uint8_t bg = VGA_COLOR_MAGENTA;
+	uint8_t fg = VGA_COLOR_WHITE;
+	uint8_t attribute = bg << 4 | fg;
+	
+	unsigned char ch = ' ';
+	
+	uint16_t pixel = attribute << 8 | ch;
+	size_t i;
+	for(i=0;i<VGA_WIDTH*VGA_HEIGHT;i++){
+		terminal_buffer[i] = pixel;
 	}
 }
 
-void terminal_setcolor(uint8_t color) 
-{
-	terminal_color = color;
+
+void initialize_screen(){
+
+	terminal_buffer = (uint16_t *)0xB8000;
+	fill_the_screen();
+
 }
 
-void terminal_putentryat(char c, uint8_t color, size_t x, size_t y) 
-{
-	if(c == '\n'){
-		if(terminal_column == 25){
-			scroll_up();
-		}
-		terminal_row++;
-		terminal_column = 0;
-	}
-	else{
-		const size_t index = y * VGA_WIDTH + x;
-		terminal_buffer[index] = vga_entry(c, color);
-	}
+uint16_t get_pixel(char ch){
+	uint8_t bg = VGA_COLOR_MAGENTA;
+	uint8_t fg = VGA_COLOR_WHITE;
+	uint8_t attribute = bg << 4 | fg;
+	return attribute << 8 | ch;
 }
 
-void terminal_putchar(char c) 
-{
-	terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
-	if (++terminal_column == VGA_WIDTH) {
-		terminal_column = 0;
-		if (++terminal_row == VGA_HEIGHT)
-			terminal_row = 0;
-	}
+
+void vprintc(char ch){
+	uint16_t pixel = get_pixel(ch);
+	terminal_buffer[terminal_row * VGA_WIDTH + terminal_column] = pixel;
 }
 
-void terminal_write(const char* data, size_t size) 
-{
-	for (size_t i = 0; i < size; i++)
-		terminal_putchar(data[i]);
+size_t _strlen(char *str){
+	size_t len = 0;
+	while(str[len]){
+		len++;
+	}
+	return len;
 }
+
 
 
 void scroll_up(){
-	uint16_t i;
-	for(i = 0;i<=1919;i++){
+	
+	for(int i =0;i <= 1919; i++){
 		terminal_buffer[i] = terminal_buffer[i+80];
 	}
-	for(i = 1920;i<=(VGA_WIDTH * VGA_HEIGHT)-1;i++){
-		char ch = 'd';
-		terminal_buffer[i] = vga_entry(' ',terminal_color);
+	char ch = ' ';
+	uint16_t pixel = get_pixel(ch);
+	for(int i = 1920;i<1999;i++){
+		terminal_buffer[i] = pixel;
 	}
+	
 }
 
 
-void terminal_writestring(const char* data) 
-{
-	terminal_write(data, strlen(data));
+
+void vprintstr(char *str){
+	size_t i;
+	size_t str_size = _strlen(str);
+	for(i = 0;i<str_size;i++){
+		if(str[i] == '\n'){
+			terminal_column = 0;
+			terminal_row++;
+			continue;
+		}
+		else if(str[i] == '\t'){
+			if(terminal_column == VGA_WIDTH){
+				terminal_row++;
+				terminal_column = 0;
+				continue;
+			}
+			terminal_column = terminal_column + 8;
+			continue;
+		}
+		vprintc(str[i]);
+		terminal_column++;
+	}
 	if(terminal_row == VGA_HEIGHT){
+		terminal_row = VGA_HEIGHT-1;
 		scroll_up();
 	}
 }
 
-void kernel_main(void) 
-{
-	terminal_initialize();
 
-	terminal_writestring("WELCOME TO noviceOS!!\n");
-//	uint8_t intro_row;
-//	uint8_t intro_col;
-//	for(intro_row = 0;intro_row<=7;intro_row++){
-//		for(intro_col = 0;intro_col<=20;intro_col++){
-//			if(intro_array[intro_row*21 + intro_col] == 1){
-//				terminal_buffer[terminal_column] = vga_entry('#',VGA_COLOR_RED);
-//			}
-//			terminal_column++;
-//		}
-//		terminal_row++;
-//		terminal_column = 0;
-//	}
 
+
+void kernel_main(){
+	initialize_screen();
+	
+	// For VGA 
+	vprintstr("This is noviceOs.\n");
+	vprintstr("Under Construction.\n");
+	
+	vprintstr("This is line 2.\n");
+	vprintstr("This is line 3.\n");
+	vprintstr("This is line 4.\n");
+	vprintstr("This is line 5.\n");
+	vprintstr("This is line 6.\n");
+	vprintstr("This is line 7.\n");
+	vprintstr("This is line 8.\n");
+	vprintstr("This is line 9.\n");
+	vprintstr("This is line 10.\n");
+	vprintstr("This is line 11.\n");
+	vprintstr("This is line 12.\n");
+	vprintstr("This is line 13.\n");
+	vprintstr("This is line 14.\n");
+	vprintstr("This is line 15.\n");
+	vprintstr("This is line 16.\n");
+	vprintstr("This is line 17.\n");
+	vprintstr("This is line 18.\n");
+	vprintstr("This is line 19.\n");
+	vprintstr("This is line 20.\n");
+	vprintstr("This is line 21.\n");
+	vprintstr("This is line 22.\n");
+	vprintstr("This is line 23.\n");
+	vprintstr("This is line 24.\n");
+	vprintstr("This is line 25.\n");
+	for(int i = 0;i< 20; i++){
+		vprintstr("Covered them lol\n");
+	}
+	// Things to do -> add support for scrollup feature.
+
+	
 
 }
