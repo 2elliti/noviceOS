@@ -148,9 +148,12 @@ void terminal_writestring(const char* data)
 
 void kernel_main(void) 
 {
+	/* Initialize terminal interface */
 	terminal_initialize();
 
-	terminal_writestring("WELCOME TO noviceOS!!\n");
+	/* Newline support is left as an exercise. */
+	
+
 //	uint8_t intro_row;
 //	uint8_t intro_col;
 //	for(intro_row = 0;intro_row<=7;intro_row++){
@@ -165,4 +168,16 @@ void kernel_main(void)
 //	}
 
 
+uint8_t intro_row = 0;
+for (; intro_row <= 7; intro_row++) {
+    uint8_t intro_col = 0; // Reset intro_col for each intro_row iteration
+    for (; intro_col <= 20; intro_col++) {
+        if (intro_array[intro_row * 21 + intro_col] == 1) {
+            terminal_buffer[terminal_column] = vga_entry('#', VGA_COLOR_RED);
+        }
+        terminal_column++;
+    }
+    terminal_row++;
+    terminal_column = 0;
+}
 }
